@@ -1,6 +1,7 @@
 # 🏛️ AI Lawyer Assistant
 
 > **"Justice should not be a privilege for the wealthy, nor should there be a barrier to entry for fairness."**
+> *Multilingual Support: 🇺🇸 🇹🇼 🇨🇳 🇯🇵 🇰🇷 🇻🇳 🇮🇩 🇹🇭 🇮🇳*
 
 ## 🕯️ A Letter to You: Far From Home, With Limited Resources
 
