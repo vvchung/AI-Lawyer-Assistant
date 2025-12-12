@@ -16,7 +16,7 @@ You know lawyers are expensive. A single hour of consultation might cost half yo
 
 **Please do not give up. Please do not be afraid. This project exists specifically to protect you.**
 
-Inspired by the healing spirit of **HuatuoGPT**, we deeply believe: **The advancement of technology should be used to bridge the gap created by wealth, not widen it.**
+Inspired by the healing spirit of **[HuatuoGPT-II, One-stage Training for Medical Adaption of LLMs](https://arxiv.org/abs/2311.09774)**, we deeply believe: **The advancement of technology should be used to bridge the gap created by wealth, not widen it.**
 
 This is not just a cold program; it is a **Digital Guardian** prepared for you. It charges no fees, it never sleeps, and it does not judge your background. It is always ready to listen to your grievances and hand you a sword to defend your dignity.
 
