@@ -119,4 +119,4 @@ If the AI determines your situation is critical, we strongly suggest seeking hel
 
 ---
 
-*Powered by Google Gemini AI | Dedicated to Legal Equality for All Students*
+*Made with ❤️, ☕, and Gemini | Dedicated to Legal Equality for All Students*
