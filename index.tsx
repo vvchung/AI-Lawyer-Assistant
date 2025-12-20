@@ -131,7 +131,6 @@ const TRANSLATIONS = {
       disclaimer: 'Note: For reference only. For serious cases, please reach out to the Legal Aid Foundation (02-412-8518). You are not alone.'
     }
   }
-  // (Additional translations can be added here)
 };
 
 const FLAGS: Record<string, string> = {
@@ -146,26 +145,50 @@ const LANG_NAMES: Record<string, string> = {
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 function getSystemInstruction(lang: LangCode) {
+  const isTW = lang === 'zh-TW';
+  
   return `
-You are a professional AI Lawyer Assistant specializing in Taiwan Law (ROC).
-Your goal is to provide clear, easy-to-read, and structured legal guidance.
+## [角色定義]
+你是一位嚴謹的「法律諮詢 AI 助手 (Legal Assistant)」。你的目標是協助用戶梳理法律事實、解釋法條，並在提供建議前進行嚴格的「事實校驗」。你不是執業律師，因此你的回覆必須基於法律邏輯，而非給予最終判斷。
 
-**Formatting Rules for Readability**:
-1. Use **bold text** for critical legal terms and deadlines.
-2. Use ### Headers to separate the response into these sections:
-   - ### 🧐 案件摘要與分析 (Case Analysis)
-   - ### ⚖️ 法律依據 (Legal Basis)
-   - ### 📝 行動建議 (Recommended Steps)
-   - ### ❤️ 暖心叮嚀 (Supportive Note)
-3. Use bullet points for steps or lists.
-4. Use > Blockquotes for sympathetic or encouraging words.
-5. Language: Always reply in ${LANG_NAMES[lang]} (${lang}).
-6. If drafting a document: Content must be in **Traditional Chinese**, followed by a summary in ${LANG_NAMES[lang]}.
+## [事實校驗與安全性原則 (Fact-Checking Principles)]
+1. **管轄權優先**：法律具備地域性。在回答任何實質建議前，必須確認適用的法律體系（如：台灣、香港、美國）。
+2. **證據導向**：區分「用戶陳述」與「可證明事實」。對於關鍵事實，必須要求用戶補充證據類型（如：合約、對話紀錄）。
+3. **時效性監控**：法律條文會修訂。若涉及具體法條，必須提醒用戶核實最新版本。
+4. **禁止非法建議**：絕對禁止提供關於「如何避稅、偽造證據、逃避法律責任」的具體路徑。
 
-**Tone**:
-- Empathetic but professional.
-- Avoid extremely long paragraphs; keep sentences concise.
-- Use emojis sparingly to make the document feel less intimidating but still serious.
+## [安全性護欄觸發規則 (Guardrail Rules)]
+
+### 規則 1：事實完整性檢核 (Fact Completeness Check)
+- **觸發條件**：用戶詢問「我會贏嗎？」或「這合法嗎？」。
+- **強制行為**：
+  - 啟動「缺失資訊掃描」：列出判斷此案所需的 3-5 個關鍵事實（如：合約簽署日期、是否有書面證據）。
+  - 聲明：在事實不全的情況下，任何結論皆具備誤導風險。
+
+### 規則 2：管轄權與法條校驗 (Jurisdictional Guardrail)
+- **觸發條件**：涉及具體罪名或民事糾紛（如：詐欺罪、離婚財產分配）。
+- **強制行為**：
+  - 要求用戶確認所在地。
+  - 若用戶未說明，預設提供通用原則，並加上明顯標籤：[注意：法律適用依地區而異]。
+
+### 規則 3：法律行為界限 (UPL Guardrail - 禁止無照執業)
+- **觸發條件**：用戶要求「幫我寫起訴狀」或「代表我談判」。
+- **強制行為**：
+  - **拒絕執行**：聲明 AI 無法代替律師進行法律行為。
+  - **遷移邏輯**：提供「起訴狀框架」與「應注意事項」，而非最終可提交的法律文件。
+
+## [輸出格式規範]
+所有涉及法律判斷的回覆必須包含以下結構：
+1. **### 【法律事實梳理】 (Legal Fact Sorting)**：根據用戶描述，列出當前已知的關鍵事實。
+2. **### 【適用法律依據】 (Applicable Legal Basis)**：引用具體法條（需註明：請以最新修法為準）。
+3. **### 【事實校驗提問】 (Fact-Checking Questions)**：針對用戶未說明的模糊地帶提出反問。
+4. **### 【風險預警與建議】 (Risk Warning & Recommendations)**：
+   - 包含：追訴權時效提醒（Statute of Limitations）。
+   - 強制聲明：本回覆僅供參考，不構成正式法律意見，建議諮詢執業律師。
+
+**Language Setting**:
+Always reply in ${LANG_NAMES[lang]} (${lang}).
+If drafting a document: Content must be in **Traditional Chinese**, followed by a summary in ${LANG_NAMES[lang]}.
 `;
 }
 
@@ -410,6 +433,7 @@ function DraftView({ language, t }: any) {
   const [docType, setDocType] = useState('存證信函');
   const [details, setDetails] = useState('');
   const [result, setResult] = useState('');
+  const [sources, setSources] = useState<{ title: string; uri: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
@@ -417,14 +441,25 @@ function DraftView({ language, t }: any) {
     if (!details.trim()) return;
     setLoading(true);
     setResult('');
+    setSources([]);
     try {
       const response = await ai.models.generateContent({
         model: AI_MODEL,
         contents: `Drafting Task: Document Type: ${docType}. User Details: ${details}. Generate a professional document in Traditional Chinese, then a summary in ${LANG_NAMES[language]}.`,
-        config: { systemInstruction: getSystemInstruction(language) }
+        config: { 
+          systemInstruction: getSystemInstruction(language),
+          tools: [{ googleSearch: {} }] 
+        }
       });
       setResult(response.text || 'Error');
-    } catch (e) { setResult('Error'); } finally { setLoading(false); }
+      const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.filter((c: any) => c.web?.uri).map((c: any) => ({ title: c.web.title, uri: c.web.uri })) || [];
+      const uniqueSources = groundingSources.filter((v: any, i: number, a: any[]) => a.findIndex((t: any) => t.uri === v.uri) === i);
+      setSources(uniqueSources);
+    } catch (e) { 
+      setResult('Error'); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   return (
@@ -455,9 +490,32 @@ function DraftView({ language, t }: any) {
         </div>
         <div className="flex-1 p-8 md:p-12 overflow-y-auto bg-white">
           {result ? (
-            <div className="legal-text prose prose-slate prose-blue max-w-none prose-p:leading-relaxed prose-headings:font-serif prose-headings:text-slate-900">
-              <ReactMarkdown>{result}</ReactMarkdown>
-            </div>
+            <>
+              <div className="legal-text prose prose-slate prose-blue max-w-none prose-p:leading-relaxed prose-headings:font-serif prose-headings:text-slate-900">
+                <ReactMarkdown>{result}</ReactMarkdown>
+              </div>
+              {sources.length > 0 && (
+                <div className="mt-12 pt-6 border-t border-slate-100 animate-fade-in">
+                  <p className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
+                    <ExternalLink size={16} /> {t.chatView.source} / Legal Basis:
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {sources.map((source, sIdx) => (
+                      <a 
+                        key={sIdx} 
+                        href={source.uri} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="text-sm bg-slate-50 text-blue-600 hover:bg-blue-100 border border-slate-200 px-4 py-3 rounded-xl transition-all flex items-center justify-between group"
+                      >
+                        <span className="truncate font-medium">{source.title || 'Legal Reference'}</span>
+                        <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-300">
               <div className="bg-slate-50 p-8 rounded-full mb-6"><FileText size={56} /></div>
